@@ -4,7 +4,8 @@ import sympy as sp
 from abc import ABCMeta
 
 from .mixin import ExpansionMixin
-from .algebra import Algebra, Ring  # <--- Added Ring here!
+from .expandable import Expandable
+from .algebra import Algebra, Ring, Field, AdditiveGroup
 from .blueprints import AdditiveBlueprint, MultiplicativeBlueprint, DivisibleBlueprint
 
 # ---------------------------------------------------------
@@ -16,96 +17,32 @@ class CASMeta(ABCMeta, type(sp.Expr)):
 # ---------------------------------------------------------
 # 1. SCALARS & CONSTANTS
 # ---------------------------------------------------------
-class ExpandableConstant(ExpansionMixin, sp.Expr, metaclass=CASMeta):
+class ExpandableConstant(Expandable, sp.Expr, Field, metaclass=CASMeta):
     """
     Mathematically: An element of a Field.
     Implementation: A named symbolic constant that can be expanded into a value.
     """
-    def __new__(cls, symbol=None, **kwargs):
-        # Constants don't usually take spatial coordinates in their AST args,
-        # but we can store the symbol as a SymPy Symbol internally.
-        name = symbol if symbol else cls.__name__
-        obj = super().__new__(cls, **kwargs)
-        obj._custom_symbol = name
-        return obj
-
-    @property
-    def symbol_name(self):
-        return self._custom_symbol
-
-    def _latex(self, printer):
-        """Render the constant as a LaTeX symbol: \hbar, \pi, etc."""
-        return self._custom_symbol
-
-    def _pretty(self, printer):
-        """Render the constant as a Unicode symbol."""
-        return printer._print(sp.Symbol(self._custom_symbol))
-
-    def __getnewargs_ex__(self):
-        """Preserve the symbol during SymPy algebraic reconstructions."""
-        return ((), {"symbol": self._custom_symbol})
+    pass
 
 # ---------------------------------------------------------
 # 2. FUNCTIONS
 # ---------------------------------------------------------
-class ExpandableFunction(
-    ExpansionMixin, 
-    AdditiveBlueprint, 
-    MultiplicativeBlueprint, 
-    DivisibleBlueprint, 
-    sp.Expr, 
-    Algebra, 
-    metaclass=CASMeta
-):
-    def __new__(cls, *args, symbol=None, **kwargs):
-        # We store the symbol in the 'assumptions' or a hidden attribute 
-        # so it survives SymPy's immutable copying.
-        obj = super().__new__(cls, *args, **kwargs)
-        obj._custom_symbol = symbol if symbol else cls.__name__
-        return obj
-
-    def _latex(self, printer):
-        """Standardizes LaTeX output for all functions: \Psi(x, y)"""
-        arg_str = ", ".join([printer._print(arg) for arg in self.args])
-        # If the symbol has a backslash, we treat it as a LaTeX command
-        return f"{self._custom_symbol}\left({arg_str}\right)"
-
-    def _pretty(self, printer):
-        """Standardizes Unicode output for all functions: Ψ(x)"""
-        from sympy.printing.pretty.stringpict import prettyForm
-        # Try to use the symbol, fallback to class name
-        pform = printer._print(sp.Symbol(self._custom_symbol))
-        if not self.args:
-            return pform
-        args = [printer._print(arg) for arg in self.args]
-        return prettyForm(*pform.parens())
-
-    def __getnewargs_ex__(self):
-        """Ensures the symbol is preserved during SymPy's internal rebuilds."""
-        return (self.args, {"symbol": getattr(self, '_custom_symbol', None)})
+class ExpandableFunction(Expandable, sp.Expr, Algebra, metaclass = CASMeta):
+    """
+    Mathematically: An Algebra.
+    Implementation: Automatically handles +, -, *, symbols, and evaluate().
+    """
+    pass
 
 # ---------------------------------------------------------
 # 3. OPERATORS
 # ---------------------------------------------------------
-class ExpandableOperator(ExpansionMixin, Ring, AdditiveBlueprint, MultiplicativeBlueprint, sp.Expr, metaclass=CASMeta):
-    def __new__(cls, variable, *args, symbol=None, **kwargs):
-        obj = super().__new__(cls, variable, *args, **kwargs)
-        # Default to a "hat" notation if no symbol is provided
-        obj._custom_symbol = symbol if symbol else f"\\hat{{{cls.__name__[0]}}}"
-        return obj
-
-    def _latex(self, printer):
-        """Renders as \hat{O} \Psi(x)"""
-        return self._custom_symbol
-
-    def _pretty(self, printer):
-        """Renders the operator symbol in Unicode."""
-        from sympy.printing.pretty.stringpict import prettyForm
-        return printer._print(sp.Symbol(self._custom_symbol))
-
-    def __getnewargs_ex__(self):
-        return ((self.target_var,), {"symbol": self._custom_symbol})
-
+class ExpandableOperator(Expandable, sp.Expr, Ring, metaclass=CASMeta):
+    """
+    Mathematically: A Ring.
+    Implementation: Supports composition (*) but blocks division.
+    """
+    
     @property
     def target_var(self):
         """Safely retrieves the target variable from SymPy's immutable args."""

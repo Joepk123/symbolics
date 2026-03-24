@@ -1,29 +1,11 @@
 import sympy as sp
 from ..core.base_types import ExpandableFunction
-from ..operators.differential.abstract import LinearDifferentialOperator # Assuming you moved your operator here
-
-class Gaussian(ExpandableFunction):
-    """
-    Symbolic representation of a Gaussian envelope.
-    Because it inherits ExpandableFunction, it automatically acts as an Algebra 
-    and routes +, -, *, / through your Factory.
-    """
-    def __new__(cls, coordinate, **kwargs):
-        # sp.Function automatically handles the *args coordinate routing
-        return super().__new__(cls, coordinate, **kwargs)
-    
-    @property
-    def definition(self):
-        coord = self.args[0]
-        return sp.exp(-coord**2)
+from ..operators.differential.linear import LinearDifferentialOperator
 
 class Hermite(ExpandableFunction):
     """
     Symbolic representation of the n-th Physicist's Hermite Polynomial.
     """
-    def __new__(cls, n, x, **kwargs):
-        return super().__new__(cls, n, x, **kwargs)
-
     @property
     def definition(self):
         n = self.args[0]

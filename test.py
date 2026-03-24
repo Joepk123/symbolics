@@ -1,5 +1,3 @@
-%load_ext autoreload
-%autoreload 2
 
 import sympy as sp
 from sympy import pprint
@@ -27,7 +25,7 @@ class MyTestWave(ExpandableFunction):
         return prettyForm(*pform.parens()) # Adds parentheses around args
 
     def _latex(self, printer):
-        """Controls the beautiful MathJax/LaTeX output in Notebooks."""
+        """Controls the MathJax/LaTeX output in Notebooks."""
         arg_str = ", ".join([printer._print(arg) for arg in self.args])
         return f"{self.symbol_name}\\left({arg_str}\\right)"
 
@@ -37,4 +35,4 @@ from symbolics import LinearDifferentialOperator
 x = sp.Symbol('x')
 # Define momentum operator with a custom hat symbol
 p_hat = LinearDifferentialOperator(x, {1: -sp.I}, symbol=r'\hat{p}')
-psi = ExpandableFunction(x)
+psi = MyTestWave(x)

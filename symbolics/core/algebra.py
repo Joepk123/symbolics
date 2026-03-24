@@ -1,7 +1,7 @@
 # core/algebra.py
 
 from abc import ABC, abstractmethod
-
+from .blueprints import AdditiveBlueprint, MultiplicativeBlueprint, DivisibleBlueprint
 # ---------------------------------------------------------
 # 1. GROUPS
 # ---------------------------------------------------------
@@ -13,11 +13,8 @@ class Group(ABC):
     @abstractmethod
     def inverse(self): pass
 
-class AdditiveGroup(Group):
+class AdditiveGroup(AdditiveBlueprint, ABC):
     """An Abelian Group using addition."""
-    @abstractmethod
-    def __add__(self, other): pass
-
     @abstractmethod
     def __neg__(self): pass
 
@@ -35,37 +32,32 @@ class AdditiveGroup(Group):
 # ---------------------------------------------------------
 # 2. RINGS
 # ---------------------------------------------------------
-class Ring(AdditiveGroup):
+class Ring(AdditiveGroup, MultiplicativeBlueprint, ABC):
     """
     A Ring is an Additive Group equipped with multiplication.
     Multiplication does not guarantee division (no inverses).
     Ideal for: Differential Operators, Matrices.
     """
-    @abstractmethod
-    def __mul__(self, other):
-        pass
+    pass
 
 
 # ---------------------------------------------------------
 # 3. FIELDS
 # ---------------------------------------------------------
-class Field(Ring):
+class Field(Ring, DivisibleBlueprint, ABC):
     """
     A Field is a Commutative Ring where non-zero elements can be divided.
     Ideal for: Real Numbers, Complex Numbers, Physical Constants.
     """
-    @abstractmethod
-    def __truediv__(self, other):
-        pass
+    pass
 
 
 # ---------------------------------------------------------
 # 4. VECTOR SPACES
 # ---------------------------------------------------------
-class VectorSpace(AdditiveGroup):
+class VectorSpace(AdditiveGroup, ABC):
     """
-    A Vector Space allows addition of its elements and scaling by a Field element.
-    Ideal for: State vectors in Quantum Mechanics.
+    A Vector Space allows addition and scaling by a scalar (Field element).
     """
     @abstractmethod
     def __mul__(self, scalar):
@@ -79,19 +71,16 @@ class VectorSpace(AdditiveGroup):
 
     @abstractmethod
     def __truediv__(self, scalar):
-        """Dividing a vector by a scalar is scaling by its inverse."""
+        """Scaling by the inverse of a scalar."""
         pass
 
 
 # ---------------------------------------------------------
 # 5. ALGEBRAS
 # ---------------------------------------------------------
-class Algebra(VectorSpace, Ring):
+class Algebra(Ring, ABC):
     """
     An Algebra over a Field. 
     It is a Vector Space that also allows elements to be multiplied with each other.
-    Ideal for: Continuous Functions (like Hermite and Gaussian wavefunctions).
     """
-    # No new methods need to be defined! It inherits everything it needs 
-    # from VectorSpace and Ring automatically.
     pass
