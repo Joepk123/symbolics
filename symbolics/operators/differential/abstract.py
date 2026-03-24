@@ -10,53 +10,37 @@ class AbstractDifferentialOperator(ExpandableOperator):
     Example: N(f) = (df/dx)^2 + sin(f)
     """
     def __new__(cls, variable, expr_template=None, dummy_func=None, **kwargs):
-        # 1. Create a hidden dummy function if one isn't provided
-        F = dummy_func if dummy_func else sp.Function(r'\Phi')(variable)
+        # 1. Standardize the dummy placeholder if not provided
+        F = dummy_func if dummy_func else sp.Function(r'D')(variable)
         
-        # 2. Store the abstract template tree
+        # 2. Convert string/expr template into a SymPy tree
         template = sp.sympify(expr_template) if expr_template is not None else F
         
-        # 3. Lock them into the SymPy AST
-        obj = super().__new__(cls, variable, template, F, **kwargs)
-        return obj
+        # 3. Pass to Expandable -> sp.Expr
+        # Args: (variable, template, dummy_func)
+        return super().__new__(cls, variable, template, F, **kwargs)
 
     @property
-    def variable(self):
-        """The spatial coordinate (e.g., x)"""
-        return self.args[0]
+    def variable(self): return self.args[0]
 
     @property
-    def template(self):
-        """The abstract mathematical template, e.g., Derivative(Phi(x), x)**2"""
-        return self.args[1]
+    def template(self): return self.args[1]
 
     @property
-    def dummy_func(self):
-        """The placeholder function Phi(x)"""
-        return self.args[2]
+    def dummy_func(self): return self.args[2]
 
     # ---------------------------------------------------------
     # NON-LINEAR EXECUTION & COMPOSITION
     # ---------------------------------------------------------
     def __call__(self, target_expr):
-        """
-        Executes the non-linear operator.
-        Replaces Phi(x) with the target expression.
-        """
-        applied_expr = self.template.subs(self.dummy_func, target_expr)
-        
-        # Remove the .doit() here! We want it to stay abstract 
-        # until the user explicitly calls evaluate().
-        return applied_expr
+        """Replaces Phi(x) with the target expression (Wavefunction)."""
+        # We don't call .doit()! We want it to stay a Derivative object for evaluate()
+        return self.template.subs(self.dummy_func, target_expr)
 
     def __mul__(self, other):
-        """
-        Operator Composition: N1 * N2 means N1(N2(F)).
-        SymPy handles the heavy lifting of nesting the templates!
-        """
+        """Composition: N1 * N2 means N1(N2(F))."""
         if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
-            # We compose them by substituting the second operator's template into the first!
+            # Substitute the second operator's template into the first's
             new_template = self.template.subs(self.dummy_func, other.template)
             return AbstractDifferentialOperator(self.variable, new_template, self.dummy_func)
-            
         return super().__mul__(other)

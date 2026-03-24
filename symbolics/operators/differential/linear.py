@@ -3,26 +3,16 @@ from .abstract import AbstractDifferentialOperator
 
 class LinearDifferentialOperator(AbstractDifferentialOperator):
     """
-    A strictly linear differential operator: Sum[ c_n(x) * d^n/dx^n ].
-    Inherits the robust dummy-template execution from AbstractDifferentialOperator.
+    A strictly linear operator: Sum[ c_n(x) * d^n/dx^n ].
+    Inherits template execution but adds analytic dictionary-based algebra.
     """
-    def __new__(cls, variable, terms_dict, dummy_func=None, **kwargs):
-        # 1. Standardize the dummy placeholder function
-        F = dummy_func if dummy_func else sp.Function(r'\Phi')(variable)
+    def __new__(cls, variable, terms_dict, **kwargs):
+        # 1. Build the linear template programmatically
+        F = sp.Function(r'\Phi')(variable)
+        template = sum(sp.sympify(c) * (sp.Derivative(F, (variable, n)) if n > 0 else F) 
+                       for n, c in terms_dict.items())
         
-        # 2. Programmatically build the linear mathematical template
-        template = sp.Integer(0)
-        for n, coeff in terms_dict.items():
-            c_expr = sp.sympify(coeff)
-            
-            if n == 0:
-                # 0th derivative is just multiplying the function by the coefficient
-                template += c_expr * F
-            else:
-                # nth derivative applied to the dummy function
-                template += c_expr * sp.Derivative(F, (variable, n))
-                
-        # 3. Pass the fully constructed linear template to the Abstract base class
+        # 2. Pass to Abstract base
         return super().__new__(cls, variable, expr_template=template, dummy_func=F, **kwargs)
 
     @property
