@@ -5,8 +5,9 @@ from .algebra import Group, AdditiveGroup, Ring, Field, VectorSpace, Algebra
 
 # 2. Execution & Tree Traversal
 from .mixin import ExpansionMixin
-from .visitor import unwrap, targeted_expand
+from .visitor import make_explicit, evaluate_target, evaluate
 from .factory import BaseAlgebraicFactory, CompositeSum, CompositeSub, CompositeMul, CompositeDiv
+from .promotion import resolve_promoted_base, PROMOTION_RULES
 
 # 3. Base Expandable Types
 from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator
@@ -16,8 +17,9 @@ __all__ = [
     # Math
     'Group', 'AdditiveGroup', 'Ring', 'Field', 'VectorSpace', 'Algebra',
     # Engine
-    'ExpansionMixin', 'unwrap', 'targeted_expand',
+    'ExpansionMixin', 'make_explicit', 'evaluate_target', 'evaluate',
     'BaseAlgebraicFactory', 'CompositeSum', 'CompositeSub', 'CompositeMul', 'CompositeDiv',
+    'resolve_promoted_base', 'PROMOTION_RULES',
     # Base Types
     'ExpandableConstant', 'ExpandableFunction', 'ExpandableOperator'
 ]

@@ -26,31 +26,21 @@ def _get_signature_counts(target_cls):
     
     return idx_count, coord_count
 
+from .promotion import resolve_promoted_base
+from .algebra import Field
+
 def BaseAlgebraicFactory(ClassA, ClassB, op_func, op_symbol, label=None):
-    # Extract the exact shape of the child classes
     idx_A, coord_A_count = _get_signature_counts(ClassA)
     idx_B, coord_B_count = _get_signature_counts(ClassB)
     
-    # --- FIX: DYNAMIC BASE RESOLUTION ---
-    # Find the most specific shared class that includes ExpansionMixin
-    common_bases = [
-        cls for cls in ClassA.__mro__ 
-        if cls in ClassB.__mro__ and issubclass(cls, ExpansionMixin)
-    ]
-    
-    if not common_bases:
-        raise TypeError(
-            f"Cannot combine {ClassA.__name__} and {ClassB.__name__}: "
-            "They do not share a common Expandable base class."
-        )
-        
-    BaseClass = common_bases[0]
-    # ------------------------------------
+    # --- PRO CAS UPGRADE: TYPE PROMOTION ---
+    # We now ask the registry which class should dictate the mathematical identity!
+    BaseClass = resolve_promoted_base(ClassA, ClassB)
+    # ---------------------------------------
     
     class CombinedFunction(BaseClass):
-        # --- STATEFUL METADATA ---
         _idx_count = idx_A + idx_B
-        _coord_count = coord_A_count + coord_B_count
+        _coord_count = max(coord_A_count, coord_B_count) # Max protects against Fields with 0 coords
         
         def __new__(cls, *args, **kwargs):
             instance = super().__new__(cls, *args, **kwargs)
@@ -60,36 +50,34 @@ def BaseAlgebraicFactory(ClassA, ClassB, op_func, op_symbol, label=None):
 
         @property
         def definition(self):
-            # Split arguments strictly by the known index count
             indices = self._args[:self._idx_count]
             coords = self._args[self._idx_count:]
             
             ind_A = indices[:idx_A]
             ind_B = indices[idx_A:]
             
-            # --- THE ASYMMETRIC COORDINATE ROUTER ---
-            if len(coords) == self._coord_count:
+            # Asymmetric Coordinate Router (Safeguarded for Scalars)
+            if issubclass(ClassA, Field):
+                coord_A = ()
+                coord_B = coords
+            elif issubclass(ClassB, Field):
+                coord_A = coords
+                coord_B = ()
+            elif len(coords) == self._coord_count:
                 coord_A = coords[:coord_A_count]
                 coord_B = coords[coord_A_count:]
-                
             elif len(coords) == coord_A_count and coord_A_count == coord_B_count:
                 coord_A, coord_B = coords, coords
-                
             elif len(coords) == 1:
                 coord_A = coords * coord_A_count
                 coord_B = coords * coord_B_count
-                
             else:
-                raise ValueError(
-                    f"Coordinate mismatch in {self.__class__.__name__}. "
-                    f"Expected {self._coord_count} (independent) or {coord_A_count} (shared). "
-                    f"Got {len(coords)}."
-                )
+                raise ValueError("Coordinate mismatch.")
             
             part_a = ClassA(*(ind_A + tuple(coord_A)), **self._kwargs)
             part_b = ClassB(*(ind_B + tuple(coord_B)), **self._kwargs)
             
-            # SymPy strips custom attributes, so we use the immutable class name!
+            # ... (rest of definition logic remains exactly the same)
             is_struct_a = part_a.__class__.__name__.startswith('Combined_')
             is_struct_b = part_b.__class__.__name__.startswith('Combined_')
             

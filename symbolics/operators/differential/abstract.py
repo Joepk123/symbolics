@@ -41,13 +41,13 @@ class AbstractDifferentialOperator(ExpandableOperator):
     def __call__(self, target_expr):
         """
         Executes the non-linear operator.
-        Replaces Phi(x) with the target expression and evaluates derivatives.
+        Replaces Phi(x) with the target expression.
         """
-        # Substitute the dummy function with the actual target (e.g., a Gaussian)
         applied_expr = self.template.subs(self.dummy_func, target_expr)
         
-        # Trigger SymPy's calculus engine
-        return applied_expr.doit()
+        # Remove the .doit() here! We want it to stay abstract 
+        # until the user explicitly calls evaluate().
+        return applied_expr
 
     def __mul__(self, other):
         """

@@ -11,12 +11,12 @@ class ExpansionMixin:
         """Returns the immediate symbolic definition. Defaults to self."""
         return self
 
-    def unwrap(self):
+    def make_explicit(self):
         """Executes a single layer of macro expansion."""
-        from .visitor import unwrap 
-        return unwrap(self)
+        from .visitor import make_explicit 
+        return make_explicit(self)
 
-    def deep_expand(self):
+    def evaluate(self):
         """Recursively evaluates all layers down to the Normal Form."""
         expr = self.definition
         previous_expr = None
@@ -30,7 +30,7 @@ class ExpansionMixin:
                 )
         return expr.doit()
 
-    def targeted_expand(self, target_type):
+    def evaluate_target(self, target_type):
         """
         Selectively expands only nodes of a specific type (or tuple of types).
         """
