@@ -38,7 +38,7 @@ class LinearDifferentialOperator(AbstractDifferentialOperator):
                 
             # Build the linear template programmatically
             F = sp.Function(r'\Phi')(variable)
-            template = sum(sp.sympify(c) * (sp.Derivative(F, (variable, n)) if n > 0 else F) 
+            template = sum(sp.sympify(c) * (F if n == 0 else sp.Derivative(F, (variable, n))) 
                            for n, c in terms_dict.items())
             
             # Pass to Abstract base, explicitly passing the symbol

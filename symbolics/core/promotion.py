@@ -1,6 +1,7 @@
 # core/promotion.py
 
 from .algebra import Field, Ring, Algebra, VectorSpace
+from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, ExpandableTensor
 
 # ---------------------------------------------------------
 # TYPE PROMOTION REGISTRY
@@ -36,10 +37,10 @@ def resolve_promoted_base(ClassA, ClassB):
     consults the registry, and returns the correct promoted base class.
     """
     # 1. Identify the abstract mathematical type for ClassA
-    type_A = next((t for t in (Algebra, Ring, VectorSpace, Field) if issubclass(ClassA, t)), None)
+    type_A = next((t for t in (Algebra, Field, Ring, VectorSpace) if issubclass(ClassA, t)), None)
     
     # 2. Identify the abstract mathematical type for ClassB
-    type_B = next((t for t in (Algebra, Ring, VectorSpace, Field) if issubclass(ClassB, t)), None)
+    type_B = next((t for t in (Algebra, Field, Ring, VectorSpace) if issubclass(ClassB, t)), None)
 
     if not type_A or not type_B:
         raise TypeError(f"Cannot promote types: {ClassA.__name__} or {ClassB.__name__} lacks a mathematical base.")
@@ -53,10 +54,16 @@ def resolve_promoted_base(ClassA, ClassB):
     if promoted_math_type is None:
         raise NotImplementedError(f"No promotion rule defined for {type_A.__name__} and {type_B.__name__}.")
 
-    # 4. Return the specific concrete class (ClassA or ClassB) that matches the promoted type
-    if issubclass(ClassA, promoted_math_type):
-        return ClassA
-    elif issubclass(ClassB, promoted_math_type):
-        return ClassB
+    # 4. Return the correct concrete base type that corresponds to the promoted abstract type
+    if promoted_math_type in (Algebra, VectorSpace):
+        # If either operand was a Tensor, the result is a Tensor Algebra.
+        if issubclass(ClassA, ExpandableTensor) or issubclass(ClassB, ExpandableTensor):
+            return ExpandableTensor
+        return ExpandableFunction
+    elif promoted_math_type is Ring:
+        return ExpandableOperator
+    elif promoted_math_type is Field:
+        return ExpandableConstant
     else:
-        raise TypeError("Promotion resolution failed.")
+        # This case should be rare, but it's better to be explicit.
+        raise TypeError(f"Promotion resolution failed: No concrete base type for {promoted_math_type.__name__}.")

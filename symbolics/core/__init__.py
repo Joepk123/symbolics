@@ -6,11 +6,11 @@ from .algebra import Group, AdditiveGroup, Ring, Field, VectorSpace, Algebra
 # 2. Execution & Tree Traversal
 from .mixin import ExpansionMixin
 from .visitor import make_explicit, evaluate_target, evaluate
-from .factory import BaseAlgebraicFactory, CompositeSum, CompositeSub, CompositeMul, CompositeDiv
+from .factory import CoordinateAlgebraFactory, CompositeSum, CompositeSub, CompositeMul, CompositeDiv
 from .promotion import resolve_promoted_base, PROMOTION_RULES
 
 # 3. Base Expandable Types
-from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator
+from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, define_function, EvaluatedFunction
 
 # Define exactly what is exposed when someone imports from `core`
 __all__ = [
@@ -18,8 +18,8 @@ __all__ = [
     'Group', 'AdditiveGroup', 'Ring', 'Field', 'VectorSpace', 'Algebra',
     # Engine
     'ExpansionMixin', 'make_explicit', 'evaluate_target', 'evaluate',
-    'BaseAlgebraicFactory', 'CompositeSum', 'CompositeSub', 'CompositeMul', 'CompositeDiv',
+    'CoordinateAlgebraFactory', 'CompositeSum', 'CompositeSub', 'CompositeMul', 'CompositeDiv',
     'resolve_promoted_base', 'PROMOTION_RULES',
     # Base Types
-    'ExpandableConstant', 'ExpandableFunction', 'ExpandableOperator'
+    'ExpandableConstant', 'ExpandableFunction', 'ExpandableOperator', 'define_function', 'EvaluatedFunction'
 ]

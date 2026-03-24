@@ -11,7 +11,7 @@ def make_explicit(expr):
         )
     return expr
 
-def evaluate(expr):
+def evaluate(expr, **kwargs):
     """
     Recursively unfolds all custom physics definitions inside ANY SymPy tree
     and evaluates the resulting calculus/algebra down to its Normal Form.
@@ -32,7 +32,7 @@ def evaluate(expr):
             )
             
     # 2. Execute the raw calculus (derivatives, integrals, etc.)
-    return expr.doit() if hasattr(expr, 'doit') else expr
+    return expr.doit(**kwargs) if hasattr(expr, 'doit') else expr
 
 def evaluate_target(expr, target_type):
     """Standalone visitor to expand specific types within a standard SymPy tree."""

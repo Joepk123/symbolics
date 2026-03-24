@@ -5,25 +5,7 @@ import inspect
 import operator
 from .mixin import ExpansionMixin
 from .promotion import resolve_promoted_base
-from .algebra import Field, Ring
-
-def _get_signature_counts(target_cls):
-    """
-    Returns (idx_count, coord_count) for a given class.
-    Checks for cached metadata before falling back to introspection.
-    """
-    if hasattr(target_cls, '_idx_count') and hasattr(target_cls, '_coord_count'):
-        return target_cls._idx_count, target_cls._coord_count
-    
-    sig = inspect.signature(target_cls.__new__)
-    params = [p for p in sig.parameters.values() 
-              if p.name not in ('cls', 'args', 'kwargs')
-              and p.kind in (p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY)]
-    
-    idx_count = max(0, len(params) - 1)
-    coord_count = 1 if len(params) > 0 else 0
-    
-    return idx_count, coord_count
+from .algebra import Field, Ring, Algebra, _get_signature_counts
 
 
 def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
@@ -33,9 +15,15 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
     # ---------------------------------------------------------
     # THE MATHEMATICAL FIREWALL
     # ---------------------------------------------------------
-    if issubclass(ClassA, Ring) or issubclass(ClassB, Ring):
+    # This check prevents pure Rings (like Operators) from being processed
+    # by the pointwise coordinate factory. Algebras and Fields are also Rings,
+    # but they have coordinate structures and should be allowed.
+    is_op_A = issubclass(ClassA, Ring) and not issubclass(ClassA, (Algebra, Field))
+    is_op_B = issubclass(ClassB, Ring) and not issubclass(ClassB, (Algebra, Field))
+    if is_op_A or is_op_B:
+        op_name = ClassA.__name__ if is_op_A else ClassB.__name__
         raise TypeError(
-            f"CoordinateAlgebraFactory intercepted a Ring ({ClassA.__name__} or {ClassB.__name__}). "
+            f"CoordinateAlgebraFactory intercepted a pure Ring ({op_name}). "
             "Operators are endomorphisms and lack pointwise spatial coordinates. "
             "They must process their own internal AST algebra rather than using the pointwise factory."
         )
@@ -47,62 +35,111 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
     
     class CombinedFunction(BaseClass):
         _idx_count = idx_A + idx_B
-        _coord_count = max(coord_A_count, coord_B_count) 
+        _coord_count = coord_A_count + coord_B_count 
         
         def __new__(cls, *args, **kwargs):
-            instance = super().__new__(cls, *args, **kwargs)
+            sym_A = kwargs.pop('sym_A', None)
+            sym_B = kwargs.pop('sym_B', None)
+            c_A = kwargs.pop('_c_A', coord_A_count)
+            c_B = kwargs.pop('_c_B', coord_B_count)
+            
+            instance = BaseClass.__new__(cls, *args, **kwargs)
             instance._args = args
             instance._kwargs = kwargs
+            instance._sym_A = sym_A
+            instance._sym_B = sym_B
+            instance._c_A = c_A
+            instance._c_B = c_B
             return instance
 
-        @property
-        def definition(self):
+        def _get_parts(self):
             indices = self._args[:self._idx_count]
             coords = self._args[self._idx_count:]
             
             ind_A = indices[:idx_A]
             ind_B = indices[idx_A:]
             
+            # Using dynamically injected arities protects infinitely nested trees
+            c_A, c_B = self._c_A, self._c_B
+
             if issubclass(ClassA, Field):
                 coord_A = ()
                 coord_B = coords
             elif issubclass(ClassB, Field):
                 coord_A = coords
                 coord_B = ()
-            elif len(coords) == self._coord_count:
-                coord_A = coords[:coord_A_count]
-                coord_B = coords[coord_A_count:]
-            elif len(coords) == coord_A_count and coord_A_count == coord_B_count:
+            elif len(coords) == c_A + c_B:
+                coord_A = coords[:c_A]
+                coord_B = coords[c_A:]
+            elif len(coords) == c_A and c_A == c_B:
                 coord_A, coord_B = coords, coords
             elif len(coords) == 1:
-                coord_A = coords * coord_A_count
-                coord_B = coords * coord_B_count
+                coord_A = coords * c_A
+                coord_B = coords * c_B
             else:
-                raise ValueError("Coordinate mismatch.")
-            
-            part_a = ClassA(*(ind_A + tuple(coord_A)), **self._kwargs)
-            part_b = ClassB(*(ind_B + tuple(coord_B)), **self._kwargs)
-            
-            is_struct_a = part_a.__class__.__name__.startswith('Combined_')
-            is_struct_b = part_b.__class__.__name__.startswith('Combined_')
-            
-            expr_a = part_a.definition if is_struct_a else part_a
-            expr_b = part_b.definition if is_struct_b else part_b
-            
-            return op_func(expr_a, expr_b)
+                raise ValueError(f"Coordinate mismatch. Expected {c_A + c_B} or {c_A}, got {len(coords)}")
 
-        def _repr_latex_(self):
-            tex_indices = [sp.latex(a) for a in self._args[:self._idx_count]]
-            tex_coords = ", ".join([sp.latex(c) for c in self._args[self._idx_count:]])
+            kwargs_A = dict(self._kwargs)
+            if self._sym_A is not None: kwargs_A['symbol'] = self._sym_A
             
-            lbl = label if label else f"{ClassA.__name__}{op_symbol}{ClassB.__name__}"
-            if "{" in lbl and "}" in lbl:
-                formatted_label = lbl.format(*tex_indices)
-                return f"${formatted_label}({tex_coords})$"
-            if tex_indices:
-                idx_str = ", ".join(tex_indices)
-                return f"${lbl}_{{{idx_str}}}({tex_coords})$"
-            return f"${lbl}({tex_coords})$"
+            kwargs_B = dict(self._kwargs)
+            if self._sym_B is not None: kwargs_B['symbol'] = self._sym_B
+            
+            part_a = ClassA(*(ind_A + tuple(coord_A)), **kwargs_A)
+            part_b = ClassB(*(ind_B + tuple(coord_B)), **kwargs_B)
+            return part_a, part_b
+
+        @property
+        def definition(self):
+            return self.structural_expr
+
+        @property
+        def structural_expr(self):
+            """
+            Returns an inert SymPy node representing the exact mathematical structure 
+            of this composite object. This makes the underlying structure fully known 
+            and accessible to standard SymPy traversal!
+            """
+            part_a, part_b = self._get_parts()
+            
+            if op_symbol == "+": 
+                return sp.Add(part_a, part_b, evaluate=False)
+            elif op_symbol == "-": 
+                return sp.Add(part_a, sp.Mul(sp.Integer(-1), part_b, evaluate=False), evaluate=False)
+            elif op_symbol == "": 
+                return sp.Mul(part_a, part_b, evaluate=False)
+            elif op_symbol == "/": 
+                return sp.Mul(part_a, sp.Pow(part_b, sp.Integer(-1), evaluate=False), evaluate=False)
+            return None
+
+        def _latex(self, printer):
+            if label:
+                tex_indices = [printer.doprint(a) for a in self._args[:self._idx_count]]
+                tex_coords = ", ".join([printer.doprint(c) for c in self._args[self._idx_count:]])
+                if "{" in label and "}" in label:
+                    return f"{label.format(*tex_indices)}\\left({tex_coords}\\right)"
+                if tex_indices:
+                    return f"{label}_{{{', '.join(tex_indices)}}}\\left({tex_coords}\\right)"
+                return f"{label}\\left({tex_coords}\\right)"
+            
+            # Delegate completely to SymPy's native AST printer
+            node = self.structural_expr
+            if node is not None:
+                return printer.doprint(node)
+                
+            part_a, part_b = self._get_parts()
+            return f"{printer.doprint(part_a)} {op_symbol} {printer.doprint(part_b)}"
+
+        def _sympystr_(self, printer):
+            if label:
+                return f"{label}({', '.join([printer.doprint(a) for a in self._args])})"
+            
+            node = self.structural_expr
+            if node is not None:
+                return printer.doprint(node)
+                
+            part_a, part_b = self._get_parts()
+            return f"{printer.doprint(part_a)} {op_symbol} {printer.doprint(part_b)}"
 
     CombinedFunction.__name__ = f"Combined_{ClassA.__name__}_{ClassB.__name__}"
     return CombinedFunction

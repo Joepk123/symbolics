@@ -97,7 +97,26 @@ class AbstractDifferentialOperator(ExpandableOperator):
     def definition(self):
         """Provides the explicit mathematical template wrapped in a visual proxy."""
         return OperatorDisplayProxy(self.template, self.dummy_func)
+    def __add__(self, other):
+        from ...core.promotion import resolve_promoted_base
+        
+        if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
+            resolve_promoted_base(self.__class__, other.__class__)
+            new_template = self.template + other.template
+            return self.__class__(self.variable, new_template, self.dummy_func)
+            
+        return super().__add__(other)
 
+    def __sub__(self, other):
+        from ...core.promotion import resolve_promoted_base
+        
+        if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
+            resolve_promoted_base(self.__class__, other.__class__)
+            new_template = self.template - other.template
+            return self.__class__(self.variable, new_template, self.dummy_func)
+            
+        return super().__sub__(other)
+    
     def __call__(self, target_expr):
         return self.template.subs(self.dummy_func, target_expr)
 
