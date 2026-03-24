@@ -4,43 +4,50 @@ import sympy as sp
 import inspect
 import operator
 from .mixin import ExpansionMixin
+from .promotion import resolve_promoted_base
+from .algebra import Field, Ring
 
 def _get_signature_counts(target_cls):
     """
     Returns (idx_count, coord_count) for a given class.
     Checks for cached metadata before falling back to introspection.
     """
-    # 1. If it's a factory-generated class, it already knows its shape!
     if hasattr(target_cls, '_idx_count') and hasattr(target_cls, '_coord_count'):
         return target_cls._idx_count, target_cls._coord_count
     
-    # 2. If it's a base primitive, inspect the __new__ signature
     sig = inspect.signature(target_cls.__new__)
     params = [p for p in sig.parameters.values() 
               if p.name not in ('cls', 'args', 'kwargs')
               and p.kind in (p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY)]
     
-    # By our Design Contract: Primitives have exactly 1 coordinate at the end.
     idx_count = max(0, len(params) - 1)
     coord_count = 1 if len(params) > 0 else 0
     
     return idx_count, coord_count
 
-from .promotion import resolve_promoted_base
-from .algebra import Field
 
-def BaseAlgebraicFactory(ClassA, ClassB, op_func, op_symbol, label=None):
+def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
+    """
+    Strictly handles pointwise algebra for coordinate-based mappings (Vector Spaces, Algebras).
+    """
+    # ---------------------------------------------------------
+    # THE MATHEMATICAL FIREWALL
+    # ---------------------------------------------------------
+    if issubclass(ClassA, Ring) or issubclass(ClassB, Ring):
+        raise TypeError(
+            f"CoordinateAlgebraFactory intercepted a Ring ({ClassA.__name__} or {ClassB.__name__}). "
+            "Operators are endomorphisms and lack pointwise spatial coordinates. "
+            "They must process their own internal AST algebra rather than using the pointwise factory."
+        )
+
     idx_A, coord_A_count = _get_signature_counts(ClassA)
     idx_B, coord_B_count = _get_signature_counts(ClassB)
     
-    # --- PRO CAS UPGRADE: TYPE PROMOTION ---
-    # We now ask the registry which class should dictate the mathematical identity!
     BaseClass = resolve_promoted_base(ClassA, ClassB)
-    # ---------------------------------------
     
     class CombinedFunction(BaseClass):
         _idx_count = idx_A + idx_B
-        _coord_count = max(coord_A_count, coord_B_count) # Max protects against Fields with 0 coords
+        _coord_count = max(coord_A_count, coord_B_count) 
         
         def __new__(cls, *args, **kwargs):
             instance = super().__new__(cls, *args, **kwargs)
@@ -56,7 +63,6 @@ def BaseAlgebraicFactory(ClassA, ClassB, op_func, op_symbol, label=None):
             ind_A = indices[:idx_A]
             ind_B = indices[idx_A:]
             
-            # Asymmetric Coordinate Router (Safeguarded for Scalars)
             if issubclass(ClassA, Field):
                 coord_A = ()
                 coord_B = coords
@@ -77,7 +83,6 @@ def BaseAlgebraicFactory(ClassA, ClassB, op_func, op_symbol, label=None):
             part_a = ClassA(*(ind_A + tuple(coord_A)), **self._kwargs)
             part_b = ClassB(*(ind_B + tuple(coord_B)), **self._kwargs)
             
-            # ... (rest of definition logic remains exactly the same)
             is_struct_a = part_a.__class__.__name__.startswith('Combined_')
             is_struct_b = part_b.__class__.__name__.startswith('Combined_')
             
@@ -104,13 +109,13 @@ def BaseAlgebraicFactory(ClassA, ClassB, op_func, op_symbol, label=None):
 
 
 def CompositeSum(A, B, label=None):
-    return BaseAlgebraicFactory(A, B, operator.add, "+", label)
+    return CoordinateAlgebraFactory(A, B, operator.add, "+", label)
 
 def CompositeSub(A, B, label=None):
-    return BaseAlgebraicFactory(A, B, operator.sub, "-", label)
+    return CoordinateAlgebraFactory(A, B, operator.sub, "-", label)
 
 def CompositeMul(A, B, label=None):
-    return BaseAlgebraicFactory(A, B, operator.mul, "", label)
+    return CoordinateAlgebraFactory(A, B, operator.mul, "", label)
 
 def CompositeDiv(A, B, label=None):
-    return BaseAlgebraicFactory(A, B, operator.truediv, "/", label)
+    return CoordinateAlgebraFactory(A, B, operator.truediv, "/", label)

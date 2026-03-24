@@ -2,23 +2,87 @@
 
 import sympy as sp
 from ...core.base_types import ExpandableOperator
-from ...core.mixin import ExpansionMixin
 
+# ---------------------------------------------------------
+# VISUAL PROXY
+# ---------------------------------------------------------
+class OperatorDisplayProxy(sp.Expr):
+    """
+    A visual proxy that hides the dummy function.
+    Mathematically, an operator requires an operand to correctly apply the product rule 
+    and chain rule. This class maintains the AST structure internally while rendering cleanly.
+    """
+    def __new__(cls, template, dummy_func):
+        return super().__new__(cls, template, dummy_func)
+
+    @property
+    def template(self): return self.args[0]
+    
+    @property
+    def dummy_func(self): return self.args[1]
+
+    def _latex(self, printer):
+        raw_latex = printer._print(self.template)
+        dummy_latex = printer._print(self.dummy_func)
+        
+        cleaned = raw_latex.replace(dummy_latex, "").strip()
+        if cleaned.endswith("+") or cleaned.endswith("-"):
+            cleaned += " 1"
+        elif cleaned == "":
+            cleaned = "1"
+        return cleaned
+
+    def _pretty(self, printer):
+        from sympy.printing.pretty.stringpict import prettyForm # Add this import
+        
+        raw = printer._print(self.template)
+        dummy = printer._print(self.dummy_func)
+        cleaned = str(raw).replace(str(dummy), "").strip()
+        
+        if cleaned.endswith("+") or cleaned.endswith("-"):
+            cleaned += " 1"
+        elif cleaned == "":
+            cleaned = "1"
+            
+        return prettyForm(cleaned) # Wrap the return value
+
+    def _sympystr_(self, printer):
+        return self._pretty(printer)
+
+    def doit(self, **kwargs):
+        return self.template.doit(**kwargs)
+        
+    def subs(self, *args, **kwargs):
+        return self.template.subs(*args, **kwargs)
+    
+    def __mul__(self, other):
+        from ...core.base_types import ExpandableFunction
+        
+        # 1. Operator * Operator -> New AST Operator
+        if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
+            new_template = self.template.subs(self.dummy_func, other.template)
+            return self.__class__(self.variable, new_template, self.dummy_func)
+            
+        # 2. Operator * Function -> Mathematical Application
+        if isinstance(other, ExpandableFunction):
+            return self.__call__(other)
+            
+        return super().__mul__(other)
+
+
+# ---------------------------------------------------------
+# ABSTRACT DIFFERENTIAL OPERATOR
+# ---------------------------------------------------------
 class AbstractDifferentialOperator(ExpandableOperator):
     """
     A fully generalized operator capable of representing non-linear mappings.
     Example: N(f) = (df/dx)^2 + sin(f)
     """
-    def __new__(cls, variable, expr_template=None, dummy_func=None, **kwargs):
-        # 1. Standardize the dummy placeholder if not provided
-        F = dummy_func if dummy_func else sp.Function(r'D')(variable)
-        
-        # 2. Convert string/expr template into a SymPy tree
+    def __new__(cls, variable, expr_template=None, dummy_func=None, symbol=None, **kwargs):
+        F = dummy_func if dummy_func else sp.Function(r'\Phi')(variable)
         template = sp.sympify(expr_template) if expr_template is not None else F
         
-        # 3. Pass to Expandable -> sp.Expr
-        # Args: (variable, template, dummy_func)
-        return super().__new__(cls, variable, template, F, **kwargs)
+        return super().__new__(cls, variable, template, F, symbol=symbol, **kwargs)
 
     @property
     def variable(self): return self.args[0]
@@ -29,18 +93,34 @@ class AbstractDifferentialOperator(ExpandableOperator):
     @property
     def dummy_func(self): return self.args[2]
 
-    # ---------------------------------------------------------
-    # NON-LINEAR EXECUTION & COMPOSITION
-    # ---------------------------------------------------------
+    @property
+    def definition(self):
+        """Provides the explicit mathematical template wrapped in a visual proxy."""
+        return OperatorDisplayProxy(self.template, self.dummy_func)
+
     def __call__(self, target_expr):
-        """Replaces Phi(x) with the target expression (Wavefunction)."""
-        # We don't call .doit()! We want it to stay a Derivative object for evaluate()
         return self.template.subs(self.dummy_func, target_expr)
 
     def __mul__(self, other):
-        """Composition: N1 * N2 means N1(N2(F))."""
         if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
-            # Substitute the second operator's template into the first's
             new_template = self.template.subs(self.dummy_func, other.template)
             return AbstractDifferentialOperator(self.variable, new_template, self.dummy_func)
         return super().__mul__(other)
+
+    # ---------------------------------------------------------
+    # DYNAMIC PRINTING FOR UNNAMED OPERATORS
+    # ---------------------------------------------------------
+    def _latex(self, printer):
+        if self._custom_symbol is not None:
+            return self._custom_symbol
+        return printer._print(OperatorDisplayProxy(self.template, self.dummy_func))
+
+    def _pretty(self, printer):
+        if self._custom_symbol is not None:
+            return printer._print(sp.Symbol(self._custom_symbol))
+        return printer._print(OperatorDisplayProxy(self.template, self.dummy_func))
+
+    def _sympystr_(self, printer):
+        if self._custom_symbol is not None:
+            return self._custom_symbol
+        return printer._print(OperatorDisplayProxy(self.template, self.dummy_func))
