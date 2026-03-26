@@ -1,4 +1,4 @@
-# core/base.py
+# core/mixin.py
 
 import sympy as sp
 
@@ -31,15 +31,18 @@ class ExpansionMixin:
         from .algebra import Algebra, Field, VectorSpace, _get_signature_counts
         from .base_types import EvaluatedFunction, SymPyWrapper, ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper
         
-        # Tensors simply return their explicit matrix grids upon evaluation
+        # Grab the symbol BEFORE checking types, so all wrappers can use it
+        sym = getattr(self, '_custom_symbol', None)
+        
+        # Tensors must be wrapped to stay in the CAS ecosystem!
         if isinstance(self, (ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper)):
-            return evaluated_expr
+            # Wrap the raw SymPy matrix back into your CAS wrapper
+            return TensorWrapper(evaluated_expr, symbol=sym) 
         
         math_type = getattr(self, 'math_type', None)
         idx_c, _ = _get_signature_counts(self)
         coords = self.args[idx_c:]
         
-        sym = getattr(self, '_custom_symbol', None)
         if math_type in (Algebra, VectorSpace):
             return EvaluatedFunction(evaluated_expr, *coords, symbol=sym)
         elif math_type is Field:

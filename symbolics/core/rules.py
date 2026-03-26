@@ -26,5 +26,8 @@ register_operation(ExpandableFunction, ExpandableFunction, '/', div_functions)
 
 
 # --- Vectors ---
-def add_vectors(v1, v2):
-    return
+def add_tensors(t1: ExpandableTensor, t2: ExpandableTensor) -> ExpandableTensor:
+    return CompositeSum(t1, t2)
+
+def sub_tensors(t1: ExpandableTensor, t2: ExpandableTensor) -> ExpandableTensor:
+    return CompositeSub(t1, t2)
