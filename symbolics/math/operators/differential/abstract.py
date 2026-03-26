@@ -1,7 +1,7 @@
 # operators/differential.py
 
 import sympy as sp
-from ...core.base_types import ExpandableOperator
+from ....core.base_types import ExpandableOperator
 
 # ---------------------------------------------------------
 # VISUAL PROXY
@@ -56,7 +56,7 @@ class OperatorDisplayProxy(sp.Expr):
         return self.template.subs(*args, **kwargs)
     
     def __mul__(self, other):
-        from ...core.base_types import ExpandableFunction
+        from ....core.base_types import ExpandableFunction
         
         # 1. Operator * Operator -> New AST Operator
         if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
@@ -98,7 +98,7 @@ class AbstractDifferentialOperator(ExpandableOperator):
         """Provides the explicit mathematical template wrapped in a visual proxy."""
         return OperatorDisplayProxy(self.template, self.dummy_func)
     def __add__(self, other):
-        from ...core.promotion import resolve_promoted_base
+        from ....core.promotion import resolve_promoted_base
         
         if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
             resolve_promoted_base(self.__class__, other.__class__)
@@ -108,7 +108,7 @@ class AbstractDifferentialOperator(ExpandableOperator):
         return super().__add__(other)
 
     def __sub__(self, other):
-        from ...core.promotion import resolve_promoted_base
+        from ....core.promotion import resolve_promoted_base
         
         if isinstance(other, AbstractDifferentialOperator) and self.variable == other.variable:
             resolve_promoted_base(self.__class__, other.__class__)

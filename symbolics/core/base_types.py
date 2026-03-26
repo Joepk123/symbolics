@@ -13,10 +13,13 @@ from .algebra import Algebra, Ring, Field, AdditiveGroup
 class CASMeta(ABCMeta, type(sp.Function)):
     pass
 
+class ExprMeta(ABCMeta, type(sp.Expr)):
+    pass
+
 # ---------------------------------------------------------
 # 1. SCALARS & CONSTANTS
 # ---------------------------------------------------------
-class ExpandableConstant(Field, Expandable, sp.Expr, metaclass=CASMeta):
+class ExpandableConstant(Field, Expandable, sp.Expr, metaclass=ExprMeta):
     """
     Mathematically: An element of a Field.
     Implementation: A scalar mapping with an arity of 0. Inherits 
@@ -120,7 +123,7 @@ class EvaluatedFunction(ExpandableFunction):
 # ---------------------------------------------------------
 # 3. OPERATORS
 # ---------------------------------------------------------
-class ExpandableOperator(Ring, Expandable, sp.Expr, metaclass=CASMeta):
+class ExpandableOperator(Ring, Expandable, sp.Expr, metaclass=ExprMeta):
     """
     Mathematically: A Ring of Endomorphisms.
     Implementation: Supports structural composition (*) but strictly blocks division.
@@ -155,17 +158,27 @@ class ExpandableOperator(Ring, Expandable, sp.Expr, metaclass=CASMeta):
 # ---------------------------------------------------------
 # 4. TENSORS
 # ---------------------------------------------------------
-class ExpandableTensor(Algebra, Expandable, sp.MatrixSymbol, metaclass=CASMeta):
+class ExpandableTensor(Algebra, Expandable, sp.MatrixSymbol, metaclass=ExprMeta):
     """
     Mathematically: An element of a Tensor Algebra.
     Implementation: A multidimensional array mapping supporting non-commutative algebra.
     """
-    def __new__(cls, name, n, m, symbol=None, **kwargs):
+    def __new__(cls, *args, symbol=None, elements=None, **kwargs):
+        # SymPy AST reconstruction strictly passes *args as (name, rows, cols).
+        # We rigorously cast args[0] to a Python str to prevent SymPy Str type errors!
+        name, n, m = str(args[0]), args[1], args[2]
         # MatrixSymbol natively handles dimensional validation (name, rows, cols)
         obj = super().__new__(cls, name, n, m, **kwargs)
         # Allow symbol to be None for dynamically generated unnamed tensors
         obj._custom_symbol = symbol 
+        obj._elements = elements
         return obj
+
+    @property
+    def definition(self):
+        if hasattr(self, '_elements') and self._elements is not None:
+            return sp.ImmutableMatrix(self._elements)
+        return self
 
     @property
     def symbol_name(self):
@@ -174,7 +187,7 @@ class ExpandableTensor(Algebra, Expandable, sp.MatrixSymbol, metaclass=CASMeta):
             return self._custom_symbol
         # Fallback to the MatrixExpr's internal name or the minted class name
         name_arg = self.args[0]
-        return name_arg if name_arg else self.__class__.__name__
+        return str(name_arg) if name_arg else self.__class__.__name__
 
     def _latex(self, printer):
         """Renders the Tensor symbol (conventionally bolded in LaTeX)."""
@@ -190,7 +203,7 @@ class ExpandableTensor(Algebra, Expandable, sp.MatrixSymbol, metaclass=CASMeta):
 
     def __getnewargs_ex__(self):
         # MatrixExpr args are (name, rows, cols)
-        return ((self.args[0], self.rows, self.cols), {"symbol": self._custom_symbol})
+        return ((str(self.args[0]), self.rows, self.cols), {"symbol": self._custom_symbol, "elements": self._elements})
 
     def __truediv__(self, other):
         return NotImplemented
@@ -202,12 +215,45 @@ class ExpandableTensor(Algebra, Expandable, sp.MatrixSymbol, metaclass=CASMeta):
     # NATIVE MATRIX ALGEBRA (Bypassing Pointwise Factory)
     # ---------------------------------------------------------
     def __add__(self, other):
-        return sp.MatAdd(self, other)
+        return TensorWrapper(sp.MatAdd(self, other))
     def __radd__(self, other):
-        return sp.MatAdd(other, self)
+        return TensorWrapper(sp.MatAdd(other, self))
     def __sub__(self, other):
-        return sp.MatAdd(self, sp.MatMul(sp.Integer(-1), other))
+        return TensorWrapper(sp.MatAdd(self, sp.MatMul(sp.Integer(-1), other)))
     def __mul__(self, other):
-        return sp.MatMul(self, other)
+        return TensorWrapper(sp.MatMul(self, other))
     def __rmul__(self, other):
-        return sp.MatMul(other, self)
+        return TensorWrapper(sp.MatMul(other, self))
+
+class TensorWrapper(Algebra, Expandable, sp.MatrixExpr, metaclass=ExprMeta):
+    """
+    Wraps native SymPy matrix expressions (like MatMul or MatAdd) to preserve 
+    the Object-Oriented evaluate() method and route matrix algebra correctly.
+    """
+    def __new__(cls, expr, symbol=None, **kwargs):
+        obj = sp.Expr.__new__(cls, expr)
+        obj._custom_symbol = symbol
+        return obj
+
+    @property
+    def shape(self):
+        return self.args[0].shape
+
+    @property
+    def definition(self):
+        return self.args[0]
+
+    def _latex(self, printer):
+        return printer.doprint(self.args[0])
+
+    def _sympystr_(self, printer):
+        return printer.doprint(self.args[0])
+
+    # Prevent the pointwise routing by strictly adhering to Matrix Operations
+    def __add__(self, other): return TensorWrapper(sp.MatAdd(self, other))
+    def __radd__(self, other): return TensorWrapper(sp.MatAdd(other, self))
+    def __sub__(self, other): return TensorWrapper(sp.MatAdd(self, sp.MatMul(sp.Integer(-1), other)))
+    def __mul__(self, other): return TensorWrapper(sp.MatMul(self, other))
+    def __rmul__(self, other): return TensorWrapper(sp.MatMul(other, self))
+    def __truediv__(self, other): return NotImplemented
+    def __rtruediv__(self, other): return NotImplemented

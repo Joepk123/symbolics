@@ -7,6 +7,8 @@ from .mixin import ExpansionMixin
 from .promotion import resolve_promoted_base
 from .algebra import Field, Ring, Algebra, _get_signature_counts
 
+_FACTORY_CACHE = {}
+
 
 def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
     """
@@ -27,6 +29,10 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
             "Operators are endomorphisms and lack pointwise spatial coordinates. "
             "They must process their own internal AST algebra rather than using the pointwise factory."
         )
+
+    cache_key = (ClassA, ClassB, op_func.__name__, op_symbol, label)
+    if cache_key in _FACTORY_CACHE:
+        return _FACTORY_CACHE[cache_key]
 
     idx_A, coord_A_count = _get_signature_counts(ClassA)
     idx_B, coord_B_count = _get_signature_counts(ClassB)
@@ -142,6 +148,8 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
             return f"{printer.doprint(part_a)} {op_symbol} {printer.doprint(part_b)}"
 
     CombinedFunction.__name__ = f"Combined_{ClassA.__name__}_{ClassB.__name__}"
+    _FACTORY_CACHE[cache_key] = CombinedFunction
+    
     return CombinedFunction
 
 

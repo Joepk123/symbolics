@@ -5,22 +5,16 @@
 import sympy as sp
 from sympy import pprint
 from symbolics.core import Algebra, Ring, Field, VectorSpace, define_function
-from symbolics.operators.differential.linear import LinearDifferentialOperator
+from symbolics.math.operators.differential.linear import LinearDifferentialOperator
+from symbolics.math.linear_algebra.tensors import Matrix, Vector, DualVector
 from symbolics.primitives.functions import Hermite
 from symbolics.primitives.elementary.exponentials import Gaussian
-from symbolics.core.base_types import ExpandableTensor
-
-class Matrix(ExpandableTensor):
-    """A general NxM Matrix mapping."""
-    def __new__(cls, name, rows, cols, symbol=None, **kwargs):
-        return super().__new__(cls, name, rows, cols, symbol=symbol, **kwargs)
-
-class Vector(ExpandableTensor):
-    """A strictly N x 1 Column Vector."""
-    def __new__(cls, name, rows, symbol=None, **kwargs):
-        # Force the column dimension to 1 to establish vector geometry
-        return super().__new__(cls, name, rows, 1, symbol=symbol, **kwargs)
-
+from symbolics.math.linear_algebra.tensors import PauliZ
+"""
+make_explicit,
+evaluate_target,
+evaluate
+"""
 
 sp.init_printing(use_unicode=True)
 
@@ -28,19 +22,38 @@ sp.init_printing(use_unicode=True)
 x, y, z = sp.symbols('x y z')
 
 # 2. Define gamma dynamically instead of manually typing a whole class!
-z_dummy = sp.Symbol('z')
+z_dummy = sp.Symbol('z^\\dagger')
 gamma = sp.Function('gamma')(z)
 
 n, m = sp.symbols('n m')
 # D
-Hn = Hermite(n, x)
-Hn = Hn.evaluate()
-H2 = Hn.subs(n, 2)
-N = sp.Symbol('N') # Abstract dimension size
+# Create arbitrary symbolic elements for your vector
+alpha, beta = sp.symbols('alpha beta')
 
-# Create an N x N matrix and an N x 1 column vector
-M = Matrix('M', N, N)
-v = Vector('v', N)
+# Instantiate the vector, passing the elements in!
+state = Vector('v', 2, elements=[alpha, beta])
+M = Matrix('M', 2, 2, elements=[[x, x], [y, y]])
 
-# Left multiplication: M * v
-state = M * v
+# Define a DualVector (1x2 row vector)
+dual_state = DualVector('w', 2, elements=[[x, y]])
+
+# ---------------------------------------------------------
+# MATHEMATICAL OPERATIONS
+# ---------------------------------------------------------
+# 1. Inner Product (1x2 * 2x1 -> 1x1 Matrix)
+inner_product = dual_state * state
+print("Inner Product:")
+display(inner_product.evaluate())
+
+# 2. Outer Product / Tensor Product (2x1 * 1x2 -> 2x2 Matrix)
+outer_product = state * dual_state
+print("Outer Product:")
+display(outer_product.evaluate())
+
+# 3. Multiply it against the PauliZ operator
+Z = PauliZ()
+result = Z * state
+
+# This will perfectly evaluate Z into its 2x2 grid, evaluate the state 
+# into its 2x1 grid, and physically compute the matrix multiplication!
+display(result.evaluate())

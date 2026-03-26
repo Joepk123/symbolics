@@ -17,7 +17,7 @@ class Hermite(ExpandableFunction):
         n = self.args[0]
         coord = self.args[1]
         
-        from ..operators.differential.linear import LinearDifferentialOperator
+        from ..math.operators.differential.linear import LinearDifferentialOperator
         
         # 1. Instantiate the operator for the n-th derivative: d^n/d(coord)^n
         # The dictionary {n: 1} maps the n-th degree to a coefficient of 1.

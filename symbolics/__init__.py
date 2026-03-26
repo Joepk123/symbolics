@@ -11,7 +11,7 @@ from .core import (
 )
 
 # 2. Operators
-from .operators import (
+from .math.operators import (
     LinearDifferentialOperator,
     AbstractDifferentialOperator
 )
