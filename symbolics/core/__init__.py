@@ -10,7 +10,7 @@ from .factory import CoordinateAlgebraFactory, CompositeSum, CompositeSub, Compo
 from .promotion import resolve_promoted_base, PROMOTION_RULES
 
 # 3. Base Expandable Types
-from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, define_function, EvaluatedFunction, TensorWrapper
+from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, define_function, EvaluatedFunction, ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper
 
 # Define exactly what is exposed when someone imports from `core`
 __all__ = [
@@ -21,5 +21,5 @@ __all__ = [
     'CoordinateAlgebraFactory', 'CompositeSum', 'CompositeSub', 'CompositeMul', 'CompositeDiv',
     'resolve_promoted_base', 'PROMOTION_RULES',
     # Base Types
-    'ExpandableConstant', 'ExpandableFunction', 'ExpandableOperator', 'define_function', 'EvaluatedFunction', 'TensorWrapper'
+    'ExpandableConstant', 'ExpandableFunction', 'ExpandableOperator', 'define_function', 'EvaluatedFunction', 'ExpandableTensor', 'TensorWrapper', 'ExpandableMatrix', 'MatrixWrapper'
 ]

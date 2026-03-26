@@ -10,7 +10,7 @@ class Gaussian(ExpandableFunction):
     Because it inherits ExpandableFunction, it automatically acts as an Algebra 
     and routes +, -, *, / through your Factory.
     """
-    def __new__(cls, coord, symbol=None, **kwargs):
+    def __new__(cls, coord, sigma, mu, symbol=None, **kwargs):
         # We must explicitly define __new__ so the factory can introspect the coordinate count!
         obj = ExpandableFunction.__new__(cls, coord, **kwargs)
         obj._custom_symbol = symbol

@@ -1,13 +1,13 @@
 import sympy as sp
-from ...core.base_types import ExpandableTensor
+from ...core.base_types import ExpandableMatrix
 
-class Matrix(ExpandableTensor):
+class Matrix(ExpandableMatrix):
     """A general NxM Matrix mapping."""
     def __new__(cls, *args, symbol=None, **kwargs):
         name, rows, cols = str(args[0]), args[1], args[2]
         return super().__new__(cls, name, rows, cols, symbol=symbol, **kwargs)
 
-class Vector(ExpandableTensor):
+class Vector(ExpandableMatrix):
     """A strictly N x 1 Column Vector."""
     def __new__(cls, *args, symbol=None, **kwargs):
         name, rows = str(args[0]), args[1]
@@ -15,8 +15,9 @@ class Vector(ExpandableTensor):
         return super().__new__(cls, name, rows, 1, symbol=symbol, **kwargs)
     
     def dagger(self):
+        pass
 
-class DualVector(ExpandableTensor):
+class DualVector(ExpandableMatrix):
     """A strictly 1 x N Row Vector (Dual Vector / Functional)."""
     def __new__(cls, *args, symbol=None, **kwargs):
         name = str(args[0])

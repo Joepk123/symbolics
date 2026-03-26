@@ -1,7 +1,7 @@
 # core/promotion.py
 
 from .algebra import Field, Ring, Algebra, VectorSpace
-from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, ExpandableTensor
+from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, ExpandableTensor, ExpandableMatrix
 
 # ---------------------------------------------------------
 # TYPE PROMOTION REGISTRY
@@ -57,7 +57,9 @@ def resolve_promoted_base(ClassA, ClassB):
     # 4. Return the correct concrete base type that corresponds to the promoted abstract type
     if promoted_math_type in (Algebra, VectorSpace):
         # If either operand was a Tensor, the result is a Tensor Algebra.
-        if issubclass(ClassA, ExpandableTensor) or issubclass(ClassB, ExpandableTensor):
+        if issubclass(ClassA, ExpandableMatrix) or issubclass(ClassB, ExpandableMatrix):
+            return ExpandableMatrix
+        elif issubclass(ClassA, ExpandableTensor) or issubclass(ClassB, ExpandableTensor):
             return ExpandableTensor
         return ExpandableFunction
     elif promoted_math_type is Ring:

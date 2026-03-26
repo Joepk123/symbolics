@@ -29,10 +29,10 @@ class ExpansionMixin:
         
         # 3. Preserve the Expandable Object-Oriented Type
         from .algebra import Algebra, Field, VectorSpace, _get_signature_counts
-        from .base_types import EvaluatedFunction, SymPyWrapper, ExpandableTensor, TensorWrapper
+        from .base_types import EvaluatedFunction, SymPyWrapper, ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper
         
         # Tensors simply return their explicit matrix grids upon evaluation
-        if isinstance(self, (ExpandableTensor, TensorWrapper)):
+        if isinstance(self, (ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper)):
             return evaluated_expr
         
         math_type = getattr(self, 'math_type', None)
