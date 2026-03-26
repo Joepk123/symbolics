@@ -12,8 +12,11 @@ class Vector(ExpandableMatrix):
     def __new__(cls, *args, symbol=None, **kwargs):
         name, rows = str(args[0]), args[1]
         # Force the column dimension to 1 to establish vector geometry
-        return super().__new__(cls, name, rows, 1, symbol=symbol, **kwargs)
-    
+        obj = super().__new__(cls, name, rows, 1, symbol=symbol, **kwargs)
+        obj._is_sum = is_sum
+        return obj
+
+
     def dagger(self):
         pass
 
@@ -24,6 +27,32 @@ class DualVector(ExpandableMatrix):
         # SymPy reconstructs with (name, rows, cols). User calls with (name, cols).
         cols = args[2] if len(args) >= 3 else args[1]
         return super().__new__(cls, name, 1, cols, symbol=symbol, **kwargs)
+
+class CompositeMatrix(Matrix):
+    """A wrapper that holds a lazy matrix operation (like MatAdd or MatMul)."""
+    def __new__(cls, ast_node, rows, cols, symbol=None, **kwargs):
+        # SymPy MatrixSymbol requires a string name, so we give it a safe dummy name
+        name = f"CompMat_{hash(ast_node)}"
+        obj = super().__new__(cls, name, rows, cols, symbol=symbol, **kwargs)
+        # Store the actual math tree!
+        obj._ast_node = ast_node
+        return obj
+
+    @property
+    def definition(self):
+        """When evaluated, unpack the hidden math tree!"""
+        return self._ast_node
+
+class CompositeVector(Vector):
+    def __new__(cls, ast_node, rows, symbol=None, **kwargs):
+        name = f"CompVec_{hash(ast_node)}"
+        obj = super().__new__(cls, name, rows, symbol=symbol, **kwargs)
+        obj._ast_node = ast_node
+        return obj
+
+    @property
+    def definition(self):
+        return self._ast_node
 
 class PauliZ(Matrix):
     """The Pauli Z Operator Matrix."""

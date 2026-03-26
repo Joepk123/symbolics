@@ -10,6 +10,39 @@ from .algebra import Field, Ring, Algebra, _get_signature_counts
 _FACTORY_CACHE = {}
 
 
+def generate_sum_class(A, B, label=None):
+    return CoordinateAlgebraFactory(A, B, operator.add, "+", label)
+
+def generate_sub_class(A, B, label=None):
+    return CoordinateAlgebraFactory(A, B, operator.sub, "-", label)
+
+def generate_mul_class(A, B, label=None):
+    return CoordinateAlgebraFactory(A, B, operator.mul, "", label)
+
+def generate_div_class(A, B, label=None):
+    return CoordinateAlgebraFactory(A, B, operator.truediv, "/", label)
+
+
+class ASTCompositeNode(sp.Expr):
+    """A lazy evaluation wrapper for INSTANCES."""
+    def __new__(cls, obj_A, obj_B, op_symbol):
+        # Pass raw args to SymPy's Expr
+        instance = super().__new__(cls, obj_A, obj_B)
+        instance._op_symbol = op_symbol
+        return instance
+        
+    def _latex(self, printer):
+        A, B = self.args
+        return f"\\left( {printer.doprint(A)} {self._op_symbol} {printer.doprint(B)} \\right)"
+    
+
+# Helper functions for rules.py to use:
+def add_instances(A, B): return ASTCompositeNode(A, B, "+")
+def sub_instances(A, B): return ASTCompositeNode(A, B, "-")
+def mul_instances(A, B): return ASTCompositeNode(A, B, "")
+def div_instances(A, B): return ASTCompositeNode(A, B, "/")
+
+
 def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
     """
     Strictly handles pointwise algebra for coordinate-based mappings (Vector Spaces, Algebras).
@@ -37,7 +70,14 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
     idx_A, coord_A_count = _get_signature_counts(ClassA)
     idx_B, coord_B_count = _get_signature_counts(ClassB)
     
-    BaseClass = resolve_promoted_base(ClassA, ClassB)
+    if issubclass(ClassA, Field) and issubclass(ClassB, Field):
+        BaseClass = ClassA
+    elif issubclass(ClassA, Field):
+        BaseClass = ClassB
+    elif issubclass(ClassB, Field):
+        BaseClass = ClassA
+    else:
+        BaseClass = ClassA
     
     class CombinedFunction(BaseClass):
         _idx_count = idx_A + idx_B
