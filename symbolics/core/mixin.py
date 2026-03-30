@@ -29,15 +29,16 @@ class ExpansionMixin:
         
         # 3. Preserve the Expandable Object-Oriented Type
         from .algebra import Algebra, Field, VectorSpace, _get_signature_counts
-        from .base_types import EvaluatedFunction, SymPyWrapper, ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper
+        from .base_types import EvaluatedFunction, ExpandableConstant, ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper
         
         # Grab the symbol BEFORE checking types, so all wrappers can use it
         sym = getattr(self, '_custom_symbol', None)
         
         # Tensors must be wrapped to stay in the CAS ecosystem!
-        if isinstance(self, (ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper)):
-            # Wrap the raw SymPy matrix back into your CAS wrapper
-            return TensorWrapper(evaluated_expr, symbol=sym) 
+        if isinstance(self, (ExpandableMatrix, MatrixWrapper)):
+            return MatrixWrapper(evaluated_expr, symbol=sym)
+        elif isinstance(self, (ExpandableTensor, TensorWrapper)):
+            return TensorWrapper(evaluated_expr, symbol=sym)
         
         math_type = getattr(self, 'math_type', None)
         idx_c, _ = _get_signature_counts(self)
@@ -46,7 +47,7 @@ class ExpansionMixin:
         if math_type in (Algebra, VectorSpace):
             return EvaluatedFunction(evaluated_expr, *coords, symbol=sym)
         elif math_type is Field:
-            return SymPyWrapper(evaluated_expr, symbol=sym)
+            return ExpandableConstant(evaluated_expr, symbol=sym)
             
         return evaluated_expr
 

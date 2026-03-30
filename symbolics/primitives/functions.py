@@ -40,7 +40,7 @@ class Hermite(ExpandableFunction):
         coord = printer.doprint(self.args[1])
         return f"{sym}_{{{n}}}\\left({coord}\\right)"
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         sym = self._custom_symbol if self._custom_symbol else "H"
         n = printer.doprint(self.args[0])
         coord = printer.doprint(self.args[1])

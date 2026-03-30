@@ -46,7 +46,7 @@ class OperatorDisplayProxy(sp.Expr):
             
         return prettyForm(cleaned) # Wrap the return value
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         return self._pretty(printer)
 
     def doit(self, **kwargs):
@@ -139,7 +139,7 @@ class AbstractDifferentialOperator(ExpandableOperator):
             return printer._print(sp.Symbol(self._custom_symbol))
         return printer._print(OperatorDisplayProxy(self.template, self.dummy_func))
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         if self._custom_symbol is not None:
             return self._custom_symbol
         return printer._print(OperatorDisplayProxy(self.template, self.dummy_func))

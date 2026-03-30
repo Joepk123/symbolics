@@ -13,7 +13,7 @@ from .algebra import Algebra, Ring, Field, AdditiveGroup
 # ---------------------------------------------------------
 # METACLASS FUSION
 # ---------------------------------------------------------
-class CASMeta(ABCMeta, type(sp.Function)):
+class CASMeta(ABCMeta, type(sp.Expr)):
     pass
 
 class ExprMeta(ABCMeta, type(sp.Expr)):
@@ -22,47 +22,66 @@ class ExprMeta(ABCMeta, type(sp.Expr)):
 # ---------------------------------------------------------
 # 1. SCALARS & CONSTANTS
 # ---------------------------------------------------------
-class ExpandableConstant(Field, Expandable, sp.Expr, metaclass=ExprMeta):
+class ExpandableConstant(Expandable, Field, sp.Expr, metaclass=CASMeta):
     """
     Mathematically: An element of a Field.
     Implementation: A scalar mapping with an arity of 0. Inherits 
-    printing logic natively from the Expandable parent class.
+    printing logic natively from the Expandable parent class, and safely 
+    wraps native SymPy scalars to prevent coordinate consumption.
     """
-    pass
-
-class SymPyWrapper(ExpandableConstant):
-    """
-    Wraps a native SymPy expression or scalar so it can interact 
-    with the CoordinateAlgebraFactory without consuming spatial coordinates.
-    """
+    is_commutative = True
     _idx_count = 1
     _coord_count = 0
 
-    def __new__(cls, expr, symbol=None, **kwargs):
-        obj = ExpandableConstant.__new__(cls, sp.sympify(expr), **kwargs)
+    def __new__(cls, *args, symbol=None, expr=None, **kwargs):
+        # Allow passing the expression as a positional argument or kwarg (used by inner products)
+        target = expr if expr is not None else (args[0] if args else None)
+        if target is not None:
+            obj = super(ExpandableConstant, cls).__new__(cls, sp.sympify(target), **kwargs)
+        else:
+            obj = super(ExpandableConstant, cls).__new__(cls, *args, **kwargs)
         obj._custom_symbol = symbol
         return obj
 
     @property
     def definition(self):
-        return self.args[0]
+        # Return the custom value if assigned, otherwise return the native SymPy argument
+        if hasattr(self, '_custom_definition'):
+            return self._custom_definition
+        return self.args[0] if self.args else self
+
+    @definition.setter
+    def definition(self, value):
+        self._custom_definition = sp.sympify(value)
 
     def _latex(self, printer):
-        return printer.doprint(self.args[0])
+        if self._custom_symbol: return self._custom_symbol
+        return printer.doprint(self.args[0]) if self.args else self.__class__.__name__
 
-    def _sympystr_(self, printer):
-        return printer.doprint(self.args[0])
+    def _sympystr(self, printer):
+        if self._custom_symbol: return self._custom_symbol
+        return printer.doprint(self.args[0]) if self.args else self.__class__.__name__
 
 # ---------------------------------------------------------
 # 2. FUNCTIONS
 # ---------------------------------------------------------
-class ExpandableFunction(Algebra, Expandable, sp.Function, metaclass=CASMeta):
+class ExpandableFunction(Expandable, Algebra, sp.Expr, metaclass=CASMeta):
     """
     Mathematically: An Algebra over a Field.
     Implementation: Automatically handles pointwise algebraic operations (+, -, *), 
     coordinate routing, and evaluation.
     """
-    pass
+    is_commutative = True
+
+    def __mul__(self, other):
+        if other == 0:
+            return sp.Integer(0)
+        return super().__mul__(other)
+
+    def __rmul__(self, other):
+        if other == 0:
+            return sp.Integer(0)
+        return super().__rmul__(other)
 
 def define_function(class_name, expr_template, *dummy_vars, default_symbol=None):
     """
@@ -123,13 +142,13 @@ class EvaluatedFunction(ExpandableFunction):
     def _latex(self, printer):
         return printer.doprint(self.args[0])
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         return printer.doprint(self.args[0])
 
 # ---------------------------------------------------------
 # 3. OPERATORS
 # ---------------------------------------------------------
-class ExpandableOperator(Ring, Expandable, sp.Expr, metaclass=ExprMeta):
+class ExpandableOperator(Expandable, Ring, sp.Expr, metaclass=CASMeta):
     """
     Mathematically: A Ring of Endomorphisms.
     Implementation: Supports structural composition (*) but strictly blocks division.
@@ -158,13 +177,13 @@ class ExpandableOperator(Ring, Expandable, sp.Expr, metaclass=ExprMeta):
         sym = self._custom_symbol if self._custom_symbol else self.__class__.__name__
         return printer._print(sp.Symbol(sym))
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         return self._custom_symbol if self._custom_symbol else self.__class__.__name__
 
 # ---------------------------------------------------------
 # 4. TENSORS
 # ---------------------------------------------------------
-class ExpandableTensor(Algebra, Expandable, ArraySymbol, metaclass=ExprMeta):
+class ExpandableTensor(Expandable, Algebra, ArraySymbol, metaclass=ExprMeta):
     """
     Mathematically: An element of a Tensor Algebra.
     Implementation: A multidimensional array mapping supporting non-commutative algebra.
@@ -196,14 +215,16 @@ class ExpandableTensor(Algebra, Expandable, ArraySymbol, metaclass=ExprMeta):
         return str(name_arg) if name_arg else self.__class__.__name__
 
     def _latex(self, printer):
-        """Renders the Tensor symbol (conventionally bolded in LaTeX)."""
-        return f"\\mathbf{{{self.symbol_name}}}"
+        """Renders the Tensor symbol."""
+        if "\\" in self.symbol_name or " " in self.symbol_name:
+            return self.symbol_name
+        return printer.doprint(sp.Symbol(self.symbol_name))
 
     def _pretty(self, printer):
         """Renders the Tensor symbol for console output."""
         return printer._print(sp.Symbol(self.symbol_name))
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         """Overrides generic string casting to prevent raw SymPy internal prints."""
         return self.symbol_name
 
@@ -211,29 +232,7 @@ class ExpandableTensor(Algebra, Expandable, ArraySymbol, metaclass=ExprMeta):
         # ArraySymbol args are (name, *shape)
         return ((str(self.args[0]), *self.shape), {"symbol": self._custom_symbol, "elements": self._elements})
 
-    def __truediv__(self, other):
-        return NotImplemented
-
-    def __rtruediv__(self, other):
-        return NotImplemented
-
-    def __add__(self, other):
-        return TensorWrapper(sp.Add(self, other))
-    def __radd__(self, other):
-        return TensorWrapper(sp.Add(other, self))
-    def __sub__(self, other):
-        return TensorWrapper(sp.Add(self, sp.Mul(sp.Integer(-1), other)))
-    def __mul__(self, other):
-        # Safely handle commutative scalar scaling vs Non-commutative Tensor Products
-        if isinstance(other, (sp.Expr, int, float, complex)) and not getattr(other, 'is_Matrix', False) and not isinstance(other, (ArraySymbol, sp.MatrixExpr)):
-            return TensorWrapper(sp.Mul(self, other))
-        return TensorWrapper(tensorproduct(self, other))
-    def __rmul__(self, other):
-        if isinstance(other, (sp.Expr, int, float, complex)) and not getattr(other, 'is_Matrix', False) and not isinstance(other, (ArraySymbol, sp.MatrixExpr)):
-            return TensorWrapper(sp.Mul(other, self))
-        return TensorWrapper(tensorproduct(other, self))
-
-class TensorWrapper(Algebra, Expandable, sp.Expr, metaclass=ExprMeta):
+class TensorWrapper(Expandable, Algebra, sp.Expr, metaclass=ExprMeta):
     """
     Wraps native SymPy array/tensor expressions to preserve 
     the Object-Oriented evaluate() method and route matrix algebra correctly.
@@ -254,30 +253,13 @@ class TensorWrapper(Algebra, Expandable, sp.Expr, metaclass=ExprMeta):
     def _latex(self, printer):
         return printer.doprint(self.args[0])
 
-    def _sympystr_(self, printer):
+    def _sympystr(self, printer):
         return printer.doprint(self.args[0])
-
-    def __add__(self, other): return TensorWrapper(sp.Add(self, other))
-    def __radd__(self, other): return TensorWrapper(sp.Add(other, self))
-    def __sub__(self, other): return TensorWrapper(sp.Add(self, sp.Mul(sp.Integer(-1), other)))
-    
-    def __mul__(self, other): 
-        if isinstance(other, (sp.Expr, int, float, complex)) and not getattr(other, 'is_Matrix', False) and not isinstance(other, (ArraySymbol, sp.MatrixExpr)):
-            return TensorWrapper(sp.Mul(self, other))
-        return TensorWrapper(tensorproduct(self, other))
-        
-    def __rmul__(self, other): 
-        if isinstance(other, (sp.Expr, int, float, complex)) and not getattr(other, 'is_Matrix', False) and not isinstance(other, (ArraySymbol, sp.MatrixExpr)):
-            return TensorWrapper(sp.Mul(other, self))
-        return TensorWrapper(tensorproduct(other, self))
-
-    def __truediv__(self, other): return NotImplemented
-    def __rtruediv__(self, other): return NotImplemented
 
 # ---------------------------------------------------------
 # 5. MATRICES (2D TENSORS)
 # ---------------------------------------------------------
-class ExpandableMatrix(Algebra, Expandable, sp.MatrixSymbol, metaclass=ExprMeta):
+class ExpandableMatrix(Expandable, Algebra, sp.MatrixSymbol, metaclass=ExprMeta):
     """
     Mathematically: An element of a Matrix Algebra (Rank-2 Tensor).
     Implementation: A 2D mapping supporting strict non-commutative matrix algebra.
@@ -292,8 +274,23 @@ class ExpandableMatrix(Algebra, Expandable, sp.MatrixSymbol, metaclass=ExprMeta)
     @property
     def definition(self):
         if hasattr(self, '_elements') and self._elements is not None:
+            # SymPy's ImmutableMatrix(flat_list) creates a column vector.
+            # For DualVector (1xN), we need to ensure it's a list of lists.
+            if self.rows == 1 and isinstance(self._elements, (list, tuple)) and \
+               (not self._elements or not isinstance(self._elements[0], (list, tuple))):
+                return sp.ImmutableMatrix([self._elements])
             return sp.ImmutableMatrix(self._elements)
         return self
+
+    @definition.setter
+    def definition(self, value):
+        if not (isinstance(value, list) or hasattr(value, 'is_Matrix')):
+            raise TypeError("Matrix definition must be a list of lists or a SymPy Matrix.")
+        # Store as a list of lists if it's a flat list for a row vector
+        if self.rows == 1 and isinstance(value, (list, tuple)) and not isinstance(value[0], (list, tuple)):
+            self._elements = [value]
+        else:
+            self._elements = value
 
     @property
     def symbol_name(self):
@@ -301,23 +298,17 @@ class ExpandableMatrix(Algebra, Expandable, sp.MatrixSymbol, metaclass=ExprMeta)
         name_arg = self.args[0]
         return str(name_arg) if name_arg else self.__class__.__name__
 
-    def _latex(self, printer): return f"\\mathbf{{{self.symbol_name}}}"
+    def _latex(self, printer):
+        if "\\" in self.symbol_name or " " in self.symbol_name:
+            return self.symbol_name
+        return printer.doprint(sp.Symbol(self.symbol_name))
     def _pretty(self, printer): return printer._print(sp.Symbol(self.symbol_name))
-    def _sympystr_(self, printer): return self.symbol_name
+    def _sympystr(self, printer): return self.symbol_name
 
     def __getnewargs_ex__(self):
         return ((str(self.args[0]), self.rows, self.cols), {"symbol": self._custom_symbol, "elements": self._elements})
 
-    def __truediv__(self, other): return NotImplemented
-    def __rtruediv__(self, other): return NotImplemented
-
-    def __add__(self, other): return MatrixWrapper(sp.MatAdd(self, other))
-    def __radd__(self, other): return MatrixWrapper(sp.MatAdd(other, self))
-    def __sub__(self, other): return MatrixWrapper(sp.MatAdd(self, sp.MatMul(sp.Integer(-1), other)))
-    def __mul__(self, other): return MatrixWrapper(sp.MatMul(self, other))
-    def __rmul__(self, other): return MatrixWrapper(sp.MatMul(other, self))
-
-class MatrixWrapper(Algebra, Expandable, sp.MatrixExpr, metaclass=ExprMeta):
+class MatrixWrapper(Expandable, Algebra, sp.MatrixExpr, metaclass=ExprMeta):
     """Wraps native SymPy matrix expressions (MatMul/MatAdd) for delayed AST execution."""
     def __new__(cls, expr, symbol=None, **kwargs):
         obj = sp.Expr.__new__(cls, expr)
@@ -329,12 +320,4 @@ class MatrixWrapper(Algebra, Expandable, sp.MatrixExpr, metaclass=ExprMeta):
     @property
     def definition(self): return self.args[0]
     def _latex(self, printer): return printer.doprint(self.args[0])
-    def _sympystr_(self, printer): return printer.doprint(self.args[0])
-
-    def __add__(self, other): return MatrixWrapper(sp.MatAdd(self, other))
-    def __radd__(self, other): return MatrixWrapper(sp.MatAdd(other, self))
-    def __sub__(self, other): return MatrixWrapper(sp.MatAdd(self, sp.MatMul(sp.Integer(-1), other)))
-    def __mul__(self, other): return MatrixWrapper(sp.MatMul(self, other))
-    def __rmul__(self, other): return MatrixWrapper(sp.MatMul(other, self))
-    def __truediv__(self, other): return NotImplemented
-    def __rtruediv__(self, other): return NotImplemented
+    def _sympystr(self, printer): return printer.doprint(self.args[0])

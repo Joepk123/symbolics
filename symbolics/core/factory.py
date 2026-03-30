@@ -4,43 +4,9 @@ import sympy as sp
 import inspect
 import operator
 from .mixin import ExpansionMixin
-from .promotion import resolve_promoted_base
 from .algebra import Field, Ring, Algebra, _get_signature_counts
 
 _FACTORY_CACHE = {}
-
-
-def generate_sum_class(A, B, label=None):
-    return CoordinateAlgebraFactory(A, B, operator.add, "+", label)
-
-def generate_sub_class(A, B, label=None):
-    return CoordinateAlgebraFactory(A, B, operator.sub, "-", label)
-
-def generate_mul_class(A, B, label=None):
-    return CoordinateAlgebraFactory(A, B, operator.mul, "", label)
-
-def generate_div_class(A, B, label=None):
-    return CoordinateAlgebraFactory(A, B, operator.truediv, "/", label)
-
-
-class ASTCompositeNode(sp.Expr):
-    """A lazy evaluation wrapper for INSTANCES."""
-    def __new__(cls, obj_A, obj_B, op_symbol):
-        # Pass raw args to SymPy's Expr
-        instance = super().__new__(cls, obj_A, obj_B)
-        instance._op_symbol = op_symbol
-        return instance
-        
-    def _latex(self, printer):
-        A, B = self.args
-        return f"\\left( {printer.doprint(A)} {self._op_symbol} {printer.doprint(B)} \\right)"
-    
-
-# Helper functions for rules.py to use:
-def add_instances(A, B): return ASTCompositeNode(A, B, "+")
-def sub_instances(A, B): return ASTCompositeNode(A, B, "-")
-def mul_instances(A, B): return ASTCompositeNode(A, B, "")
-def div_instances(A, B): return ASTCompositeNode(A, B, "/")
 
 
 def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
@@ -176,7 +142,7 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
             part_a, part_b = self._get_parts()
             return f"{printer.doprint(part_a)} {op_symbol} {printer.doprint(part_b)}"
 
-        def _sympystr_(self, printer):
+        def _sympystr(self, printer):
             if label:
                 return f"{label}({', '.join([printer.doprint(a) for a in self._args])})"
             
@@ -191,6 +157,47 @@ def CoordinateAlgebraFactory(ClassA, ClassB, op_func, op_symbol, label=None):
     _FACTORY_CACHE[cache_key] = CombinedFunction
     
     return CombinedFunction
+
+
+# 1. CLASS GENERATORS (For defining new function types)
+def generate_sum_class(A, B, label=None): return CoordinateAlgebraFactory(A, B, operator.add, "+", label)
+def generate_sub_class(A, B, label=None): return CoordinateAlgebraFactory(A, B, operator.sub, "-", label)
+def generate_mul_class(A, B, label=None): return CoordinateAlgebraFactory(A, B, operator.mul, "", label)
+def generate_div_class(A, B, label=None): return CoordinateAlgebraFactory(A, B, operator.truediv, "/", label)
+
+# 2. INSTANCE NODES (For live notebook algebra)
+class ASTCompositeNode(sp.Expr):
+    def __new__(cls, obj_A, obj_B, op_symbol):
+        instance = super().__new__(cls, obj_A, obj_B)
+        instance._op_symbol = op_symbol
+        return instance
+        
+    def _latex(self, printer):
+        A, B = self.args
+        return f"\\left( {printer.doprint(A)} {self._op_symbol} {printer.doprint(B)} \\right)"
+
+    def _sympystr(self, printer):
+        A, B = self.args
+        sep = f" {self._op_symbol} " if self._op_symbol else " "
+        return f"({printer.doprint(A)}{sep}{printer.doprint(B)})"
+
+    def _pretty(self, printer):
+        from sympy.printing.pretty.stringpict import prettyForm, stringPict
+        A, B = self.args
+        p_A = printer._print(A)
+        p_B = printer._print(B)
+        op_str = f" {self._op_symbol} " if self._op_symbol else " "
+        p_op = stringPict(op_str)
+        
+        res = stringPict(*p_A.right(p_op))
+        res = stringPict(*res.right(p_B))
+        
+        return prettyForm(*res.parens())
+
+def add_instances(A, B): return ASTCompositeNode(A, B, "+")
+def sub_instances(A, B): return ASTCompositeNode(A, B, "-")
+def mul_instances(A, B): return ASTCompositeNode(A, B, "")
+def div_instances(A, B): return ASTCompositeNode(A, B, "/")
 
 
 def CompositeSum(A, B, label=None):

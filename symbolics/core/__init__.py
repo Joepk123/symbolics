@@ -7,7 +7,7 @@ from .algebra import Group, AdditiveGroup, Ring, Field, VectorSpace, Algebra
 from .mixin import ExpansionMixin
 from .visitor import make_explicit, evaluate_target, evaluate
 from .factory import CoordinateAlgebraFactory, CompositeSum, CompositeSub, CompositeMul, CompositeDiv
-from .promotion import resolve_promoted_base, PROMOTION_RULES
+from .registry import register_operation, resolve_operation
 
 # 3. Base Expandable Types
 from .base_types import ExpandableConstant, ExpandableFunction, ExpandableOperator, define_function, EvaluatedFunction, ExpandableTensor, TensorWrapper, ExpandableMatrix, MatrixWrapper
@@ -19,7 +19,10 @@ __all__ = [
     # Engine
     'ExpansionMixin', 'make_explicit', 'evaluate_target', 'evaluate',
     'CoordinateAlgebraFactory', 'CompositeSum', 'CompositeSub', 'CompositeMul', 'CompositeDiv',
-    'resolve_promoted_base', 'PROMOTION_RULES',
+    'register_operation', 'resolve_operation',
     # Base Types
     'ExpandableConstant', 'ExpandableFunction', 'ExpandableOperator', 'define_function', 'EvaluatedFunction', 'ExpandableTensor', 'TensorWrapper', 'ExpandableMatrix', 'MatrixWrapper'
 ]
+
+# Load physics rules into the registry
+from . import rules
